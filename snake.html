@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Snake Game</title>
+  </head>
+
+  <body style="background: rgb(0, 0, 0); text-align: center">
+    <canvas
+      id="gameCanvas"
+      width="800"
+      height="600"
+      style="margin: auto"
+    ></canvas>
+    <script type="text/javascript">
+      let direction = null;
+      let snake = null;
+      let fruit = null;
+      let score = null;
+      let gameOver = null;
+      let lastTime = null;
+      // let pause = null;
+      let trail = null;
+      let startTime = null;
+      let endTime = null;
+      let inputQueue = null;
+
+      // Constants
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const cellSize = 20; // Make sure it is a common factor of width and height
+      // 1, 2, 4, 5, 8, 10, 16, 20, 32, 40, 64, 80, 128, 160, 320, 640
+      if (canvas.width % cellSize !== 0 || canvas.height % cellSize !== 0) {
+        alert(
+          `Cell size (${cellSize}) is not a factor of width (${canvas.width}) and height (${canvas.height})! Expect rendering imperfections around the margins.`
+        );
+      }
+      const center = getGridCenter(canvas.width, canvas.height, cellSize);
+
+      const initialLength = 3;
+      const snakeSpeed = 24; // Target FPS
+
+      function getGridCenter(width, height, cellSize) {
+        // Calculate the center coordinates of the grid
+        const gridWidth = width / cellSize;
+        const gridHeight = height / cellSize;
+
+        const topLeftX = Math.floor(gridWidth / 2);
+        const topLeftY = Math.floor(gridHeight / 2);
+
+        return {
+          x: topLeftX * cellSize,
+          y: topLeftY * cellSize,
+        };
+      }
+
+      // Generate a random position
+      function generateFruit(width, height, cellSize) {
+        return {
+          x: Math.floor((Math.random() * width) / cellSize) * cellSize,
+          y: Math.floor((Math.random() * height) / cellSize) * cellSize,
+        };
+      }
+
+      function initializeSnake(width, height, cellSize, length, direction) {
+        const centerX = Math.floor(canvas.width / cellSize / 2) * cellSize;
+        const centerY = Math.floor(canvas.height / cellSize / 2) * cellSize;
+
+        const delta = {
+          up: { x: 0, y: -cellSize },
+          down: { x: 0, y: cellSize },
+          left: { x: -cellSize, y: 0 },
+          right: { x: cellSize, y: 0 },
+        };
+
+        let snake = [{ x: centerX, y: centerY }];
+        for (let i = 1; i < length; i++) {
+          snake.push({
+            x: centerX - i * delta[direction].x,
+            y: centerY - i * delta[direction].y,
+          });
+        }
+        return snake;
+      }
+
+      // Reset the game
+      function resetGame() {
+        direction = ["up", "down", "left", "right"][
+          Math.floor(4 * Math.random())
+        ];
+        snake = initializeSnake(
+          canvas.width,
+          canvas.height,
+          cellSize,
+          initialLength,
+          direction
+        );
+        fruit = generateFruit(canvas.width, canvas.height, cellSize);
+        score = 0;
+        gameOver = false;
+        lastTime = 0;
+        // pause = true;
+        trail = null;
+        startTime = new Date();
+        inputQueue = new Array();
+
+        ctx.fillStyle = "rgba(4, 4, 24, 1)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        requestAnimationFrame(gameLoop);
+      }
+
+      // Game state variables
+      resetGame();
+
+      // Game loop
+      function gameLoop(currentTime) {
+        if (gameOver) {
+          // endTime = new Date();  // needs to run only once
+          return; // Stops simulation
+        }
+
+        /*
+        if (pause) {
+          requestAnimationFrame(gameLoop);
+          return;
+        }
+        */
+
+        if (inputQueue.length > 0) {
+          let newDirection = inputQueue.shift();
+          const oppositeDirections = {
+            right: "left",
+            left: "right",
+            up: "down",
+            down: "up",
+          };
+
+          if (newDirection !== oppositeDirections[direction]) {
+            direction = newDirection;
+          }
+        }
+
+        // Update snake position based on direction
+        let newHead = { ...snake[0] }; // Clone head
+        if (direction === "right") {
+          newHead.x += cellSize;
+        } else if (direction === "left") {
+          newHead.x -= cellSize;
+        } else if (direction === "up") {
+          newHead.y -= cellSize;
+        } else if (direction === "down") {
+          newHead.y += cellSize;
+        }
+
+        // Check for wall collisions and wrap around
+        if (newHead.x < 0) {
+          newHead.x = canvas.width - cellSize;
+        } else if (newHead.x >= canvas.width) {
+          newHead.x = 0;
+        } else if (newHead.y < 0) {
+          newHead.y = canvas.height - cellSize;
+        } else if (newHead.y >= canvas.height) {
+          newHead.y = 0;
+        }
+
+        // Check for wall collisions and game over
+        //if (newHead.x < 0 || newHead.x >= canvas.width || newHead.y < 0 || newHead.y >= canvas.height) {
+        //    gameOver = true;
+        //}
+
+        // Add new head
+        snake.unshift(newHead);
+
+        // Check for fruit collision
+        if (newHead.x === fruit.x && newHead.y === fruit.y) {
+          score++;
+          fruit = generateFruit(canvas.width, canvas.height, cellSize);
+        } else {
+          trail = snake.pop(); // Move instead of grow
+        }
+
+        // Check for tail collisions after moving
+        for (let i = 1; i < snake.length; i++) {
+          if (newHead.x === snake[i].x && newHead.y === snake[i].y) {
+            gameOver = true;
+          }
+        }
+      }
+
+      function formatDuration(durationMs) {
+        const minutes = Math.floor(durationMs / 60000);
+        const seconds = Math.floor((durationMs % 60000) / 1000);
+        const milliseconds = durationMs % 1000;
+
+        const minutesString = minutes < 10 ? `0${minutes}` : minutes;
+        const secondsString = seconds < 10 ? `0${seconds}` : seconds;
+        const millisecondsString =
+          milliseconds < 10
+            ? `00${milliseconds}`
+            : milliseconds < 100
+            ? `0${milliseconds}`
+            : milliseconds;
+        return `${minutesString}:${secondsString}:${millisecondsString}`;
+      }
+
+      function drawLoop() {
+        // Clear the canvas
+        ctx.fillStyle = "rgba(4, 4, 24, 0.1)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw the grid borders
+        ctx.strokeStyle = "rgba(0, 255, 0, 0.02)"; // Choose the desired color for the borders
+        ctx.lineWidth = 2; // Set the line width
+        ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+        for (let x = cellSize; x < canvas.width; x += cellSize) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+
+        for (let y = cellSize; y < canvas.height; y += cellSize) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+
+        // Draw the snake and fruit
+        ctx.fillStyle = "rgba(0, 255, 0, 1)";
+        for (let i = 0; i < snake.length; i++) {
+          ctx.fillRect(snake[i].x, snake[i].y, cellSize, cellSize);
+        }
+
+        if (!!trail) {
+          ctx.fillStyle = "rgba(255, 0, 255, 1)";
+          ctx.fillRect(trail.x, trail.y, cellSize, cellSize);
+        }
+
+        ctx.fillStyle = "rgba(255, 8, 0, 1)";
+        ctx.fillRect(fruit.x, fruit.y, cellSize, cellSize);
+
+        // Draw the score
+        ctx.font = `${cellSize}px Arial`;
+        ctx.fillStyle = "rgba(255, 255, 255, 1)";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText("Score: " + score, 0, 0);
+
+        // Handle game over
+        if (gameOver) {
+          ctx.font = `${cellSize * 3}px Arial`;
+          ctx.fillStyle = "rgba(255, 255, 255, 1)";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const gameDuration = endTime - startTime;
+          //const gameDurationText = formatDuration(gameDuration);
+          const gameOverText = `GAME OVER`;
+          // const textWidth = ctx.measureText(gameOverText).width;
+          ctx.fillText(gameOverText, canvas.width / 2, canvas.height / 2);
+        }
+
+        requestAnimationFrame(drawLoop);
+      }
+
+      /* Pause mechanic: deemed inconsistent
+      window.addEventListener("focus", () => {
+        pause = false;
+      });
+
+      window.addEventListener("blur", () => {
+        pause = true;
+      });
+      */
+
+      // Event listener for keydown events
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") {
+          inputQueue.push("right");
+        } else if (
+          event.key === "ArrowLeft" ||
+          event.key.toLowerCase() === "a"
+        ) {
+          inputQueue.push("left");
+        } else if (event.key === "ArrowUp" || event.key.toLowerCase() === "w") {
+          inputQueue.push("up");
+        } else if (
+          event.key === "ArrowDown" ||
+          event.key.toLowerCase() === "s"
+        ) {
+          inputQueue.push("down");
+        }
+
+        if (inputQueue.length > 2) {
+          inputQueue.pop();
+        }
+
+        if (
+          gameOver &&
+          (event.key === "Enter" ||
+            event.key === "Space" ||
+            event.key.toLowerCase() === "r")
+        ) {
+          resetGame();
+        }
+      });
+
+      // On window ready, start the game
+      window.addEventListener("load", function () {
+        drawLoop();
+
+        setInterval(gameLoop, 1000 / snakeSpeed);
+      });
+    </script>
+  </body>
+</html>
